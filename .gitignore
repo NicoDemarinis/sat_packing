@@ -1,0 +1,20 @@
+# Python cache / compiled
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# OpenMDAO outputs
+open_mdao_expanding_box_out/
+
+# Jupyter / notebooks
+.ipynb_checkpoints/
+
+# OS/editor junk
+.DS_Store
+.vscode/
+.idea/
+
+# Virtual environments
+.venv/
+venv/
+.env
