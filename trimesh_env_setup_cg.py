@@ -1,7 +1,7 @@
 import numpy as np
 import trimesh
 import trimesh.collision as tc
-from vedo import Box, Mesh, Plotter  # only used if visualize=True
+# from vedo import Box, Mesh, Plotter 
 
 def get_sizes_and_collisions(components=None, envelope_size=None, visualize=False):
     if envelope_size is None:
@@ -23,49 +23,61 @@ def get_sizes_and_collisions(components=None, envelope_size=None, visualize=Fals
         "envelope_size_mm": np.asarray(envelope_size, float),
         "epsilon_mm": 5.0,  # wall clearance
         "components": [],
-        "cm_obstacles": None,  # add fixed keep-outs here
+        "cm_obstacles": None,   # reserved if you add fixed keep-outs later
     }
 
     # --- Build local meshes (rotation applied), keep offsets as initial guess only ---
     for comp in components:
         mesh_local = trimesh.load_mesh(comp['file'])
 
-        # Apply fixed rotations about the mesh centroid (so translation stays clean)
+        # Apply fixed rotations about the mesh centroid
         rc = mesh_local.centroid.copy()
         rx, ry, rz = comp.get('rotation', [0, 0, 0])
-        if rx: mesh_local.apply_transform(trimesh.transformations.rotation_matrix(np.radians(rx), [1, 0, 0], point=rc))
-        if ry: mesh_local.apply_transform(trimesh.transformations.rotation_matrix(np.radians(ry), [0, 1, 0], point=rc))
-        if rz: mesh_local.apply_transform(trimesh.transformations.rotation_matrix(np.radians(rz), [0, 0, 1], point=rc))
+        if rx:
+            mesh_local.apply_transform(
+                trimesh.transformations.rotation_matrix(
+                    np.radians(rx), [1, 0, 0], point=rc
+                )
+            )
+        if ry:
+            mesh_local.apply_transform(
+                trimesh.transformations.rotation_matrix(
+                    np.radians(ry), [0, 1, 0], point=rc
+                )
+            )
+        if rz:
+            mesh_local.apply_transform(
+                trimesh.transformations.rotation_matrix(
+                    np.radians(rz), [0, 0, 1], point=rc
+                )
+            )
 
-        # Keep in local frame.
-        # Precompute locals for bounds and CG
         bmin_local, bmax_local = mesh_local.bounds
-        cg_local = mesh_local.center_mass  # in the rotated local frame
+        cg_local = mesh_local.center_mass
 
         results["components"].append({
             "name": comp['name'],
-            "mesh": mesh_local,                          # rotated, untranslated
-            "mass": float(comp.get('mass', 0.0)),        # kg
+            "mesh": mesh_local,                           # rotated, untranslated
+            "mass": float(comp.get('mass', 0.0)),         # kg
             "xyz0_mm": list(map(float, comp.get('offset', [0, 0, 0]))),
             "cg_local_mm": cg_local.astype(float).tolist(),
             "bounds_local": (bmin_local.astype(float), bmax_local.astype(float)),
-            # (optional) keep original color for viz
             "color": comp.get('color', 'silver'),
         })
 
-    # # --- Visualization of initial placement ---
-    # if visualize:
-    #     Ex, Ey, Ez = results["envelope_size_mm"].tolist()
-    #     env_center = [Ex/2.0, Ey/2.0, Ez/2.0]
-    #     envelope_viz = Box(pos=env_center, size=[Ex, Ey, Ez], c='blue5', alpha=0.15).wireframe(False)
-    #     meshes_viz = [envelope_viz]
-
-    #     # show each mesh translated to its xyz0_mm so you can see the starting layout
-    #     for comp in results["components"]:
-    #         m = comp["mesh"].copy()
-    #         m.apply_translation(comp["xyz0_mm"])
-    #         meshes_viz.append(Mesh(m, c=comp["color"], alpha=0.5).lighting('plastic'))
-
-    #     Plotter(title='Satellite Packing (initial guess)', axes=1, bg='white').show(*meshes_viz, viewup='z', interactive=True)
-
     return results
+
+def get_cg(visualize=False):
+    """
+    Wrapper for compatibility with your existing code name.
+    Also builds a collision manager for components in their *local* frame.
+    """
+    scene = get_sizes_and_collisions(visualize=visualize)
+
+    cm = tc.CollisionManager()
+    for comp in scene["components"]:
+        # NOTE: meshes are local (no translation)
+        cm.add_object(comp["name"], comp["mesh"])
+    scene["cm_components"] = cm
+
+    return scene
